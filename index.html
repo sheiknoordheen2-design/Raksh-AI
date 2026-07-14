@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RakshAI Safety App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Poppins,sans-serif;
+}
+
+body{
+background:#eef2f7;
+}
+
+/* LOGIN */
+
+#loginPage{
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background:linear-gradient(135deg,#4a6cf7,#7c4dff);
+}
+
+.loginCard{
+background:white;
+padding:35px;
+border-radius:15px;
+width:320px;
+text-align:center;
+box-shadow:0 15px 30px rgba(0,0,0,0.2);
+}
+
+.loginCard input{
+width:100%;
+padding:12px;
+margin:10px 0;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+.loginCard button{
+width:100%;
+padding:12px;
+border:none;
+background:#4a6cf7;
+color:white;
+font-size:16px;
+border-radius:8px;
+cursor:pointer;
+}
+
+/* APP */
+
+#app{
+display:none;
+}
+
+header{
+background:white;
+padding:15px;
+display:flex;
+justify-content:space-between;
+box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+.logo{
+font-size:20px;
+font-weight:bold;
+color:#4a6cf7;
+}
+
+.dashboard{
+padding:15px;
+padding-bottom:120px;
+}
+
+.card{
+background:white;
+border-radius:12px;
+padding:15px;
+margin-bottom:15px;
+box-shadow:0 4px 10px rgba(0,0,0,0.08);
+}
+
+.contactInput{
+display:flex;
+flex-direction:column;
+gap:8px;
+margin-bottom:10px;
+}
+
+.contactInput input{
+padding:10px;
+border-radius:6px;
+border:1px solid #ccc;
+}
+
+.contactInput button{
+background:#4a6cf7;
+color:white;
+border:none;
+padding:10px;
+border-radius:6px;
+}
+
+#map{
+height:250px;
+border-radius:10px;
+}
+
+.voiceBtn{
+background:#7c4dff;
+color:white;
+border:none;
+padding:12px;
+border-radius:8px;
+width:100%;
+}
+
+.sosBtn{
+position:fixed;
+bottom:20px;
+left:10%;
+width:80%;
+background:red;
+color:white;
+font-size:22px;
+padding:18px;
+border:none;
+border-radius:50px;
+animation:pulse 1.5s infinite;
+}
+
+@keyframes pulse{
+0%{transform:scale(1);}
+50%{transform:scale(1.05);}
+100%{transform:scale(1);}
+}
+
+#countdownBox{
+display:none;
+position:fixed;
+top:35%;
+left:10%;
+width:80%;
+background:white;
+padding:20px;
+border-radius:15px;
+text-align:center;
+box-shadow:0 10px 25px rgba(0,0,0,0.3);
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="loginPage">
+<div class="loginCard">
+<h2>RakshAI</h2>
+<input placeholder="Username">
+<input type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+</div>
+</div>
+
+<div id="app">
+
+<header>
+<div class="logo">RakshAI</div>
+<div>Safety Dashboard</div>
+</header>
+
+<div class="dashboard">
+
+<div class="card">
+<h3>Emergency Contacts</h3>
+
+<div class="contactInput">
+<input id="name" placeholder="Name">
+<input id="phone" placeholder="Phone Number">
+<button onclick="addContact()">Add Contact</button>
+</div>
+
+<ul id="contactList"></ul>
+
+</div>
+
+<div class="card">
+<h3>Voice Emergency Detection</h3>
+<button class="voiceBtn" onclick="startVoice()">Start Listening</button>
+<p id="voiceStatus">Voice detection inactive</p>
+</div>
+
+<div class="card">
+<h3>Your Location</h3>
+<div id="map"></div>
+</div>
+
+</div>
+
+<button class="sosBtn" onclick="triggerSOS()">🚨 SOS</button>
+
+</div>
+
+<div id="countdownBox">
+<h3>Emergency Detected!</h3>
+<p id="countdownText">Sending SOS in 10</p>
+<button onclick="cancelSOS()">Cancel</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+/* LOGIN */
+
+function login(){
+document.getElementById("loginPage").style.display="none";
+document.getElementById("app").style.display="block";
+
+initMap();
+startLiveTracking();
+startMotion();
+}
+
+/* CONTACTS */
+
+let contacts=[];
+
+function addContact(){
+
+let name=document.getElementById("name").value;
+let phone=document.getElementById("phone").value;
+
+if(!phone)return;
+
+contacts.push(phone);
+
+let li=document.createElement("li");
+li.innerText=name+" - "+phone;
+
+document.getElementById("contactList").appendChild(li);
+
+}
+
+/* MAP */
+
+let map;
+let marker;
+
+function initMap(){
+
+map=L.map('map').setView([0,0],2);
+
+L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+).addTo(map);
+
+navigator.geolocation.getCurrentPosition(function(pos){
+
+let lat=pos.coords.latitude;
+let lon=pos.coords.longitude;
+
+marker=L.marker([lat,lon]).addTo(map);
+map.setView([lat,lon],15);
+
+});
+
+}
+
+/* LIVE LOCATION */
+
+function startLiveTracking(){
+
+navigator.geolocation.watchPosition(function(pos){
+
+let lat=pos.coords.latitude;
+let lon=pos.coords.longitude;
+
+if(marker)marker.setLatLng([lat,lon]);
+
+map.setView([lat,lon],15);
+
+});
+
+}
+
+/* SOS */
+
+let timer;
+let seconds=10;
+let emergencyMessage="";
+let sosTriggered=false;
+
+function triggerSOS(){
+
+navigator.geolocation.getCurrentPosition(function(pos){
+
+let lat=pos.coords.latitude;
+let lon=pos.coords.longitude;
+
+emergencyMessage =
+"🚨 Emergency! My location: https://maps.google.com/?q="+lat+","+lon;
+
+showCountdown();
+
+});
+
+}
+
+/* COUNTDOWN */
+
+function showCountdown(){
+
+seconds=10;
+document.getElementById("countdownBox").style.display="block";
+
+timer=setInterval(function(){
+
+seconds--;
+
+document.getElementById("countdownText").innerText =
+"Sending SOS in "+seconds;
+
+if(seconds<=0){
+
+clearInterval(timer);
+sendSMS();
+
+}
+
+},1000);
+
+}
+
+/* CANCEL */
+
+function cancelSOS(){
+
+clearInterval(timer);
+sosTriggered=false;
+
+document.getElementById("countdownBox").style.display="none";
+
+}
+
+/* SEND SMS */
+
+function sendSMS(){
+
+document.getElementById("countdownBox").style.display="none";
+
+if(contacts.length==0){
+alert("Add emergency contact first");
+return;
+}
+
+let numbers=contacts.join(",");
+
+window.location.href =
+"sms:"+numbers+"?body="+encodeURIComponent(emergencyMessage);
+
+sosTriggered=false;
+
+}
+
+/* VOICE DETECTION */
+
+let recognition;
+let listening=false;
+
+function startVoice(){
+
+const SpeechRecognition =
+window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if(!SpeechRecognition){
+document.getElementById("voiceStatus").innerText =
+"Voice recognition not supported";
+return;
+}
+
+recognition = new SpeechRecognition();
+
+recognition.continuous=true;
+recognition.interimResults=true;
+recognition.lang="en-US";
+
+recognition.start();
+listening=true;
+
+document.getElementById("voiceStatus").innerText =
+"🎤 Listening for HELP / DANGER";
+
+recognition.onresult=function(event){
+
+for(let i=event.resultIndex;i<event.results.length;i++){
+
+let text=event.results[i][0].transcript.toLowerCase();
+
+document.getElementById("voiceStatus").innerText =
+"Detected: "+text;
+
+if(
+text.includes("help")||
+text.includes("help me")||
+text.includes("save me")||
+text.includes("danger")||
+text.includes("emergency")
+){
+
+if(!sosTriggered){
+sosTriggered=true;
+triggerSOS();
+}
+
+}
+
+}
+
+};
+
+recognition.onend=function(){
+
+if(listening){
+setTimeout(()=>{
+recognition.start();
+},1000);
+}
+
+};
+
+}
+
+/* SHAKE DETECTION */
+
+function startMotion(){
+
+let lastShake=0;
+
+window.addEventListener("devicemotion",function(event){
+
+let acc=event.accelerationIncludingGravity;
+
+let movement =
+Math.abs(acc.x)+Math.abs(acc.y)+Math.abs(acc.z);
+
+let time=new Date().getTime();
+
+if(movement>45){
+
+if(time-lastShake>3000){
+
+lastShake=time;
+triggerSOS();
+
+}
+
+}
+
+});
+
+}
+
+</script>
+
+</body>
+</html>
